@@ -27,11 +27,11 @@ do
     local kcp_data_len = buf(20, 4):le_uint();
 	local old_str = tostring(pkt.cols.info)
 	if old_str ~= "" then old_str = old_str .. "; " end
-    old_str = old_str .. "sn="..buf(12,4):le_uint() ..",cmd=" .. cmd_types[buf(4,1):le_uint()] .. ",len="..kcp_data_len
-	-- local cmd_type = cmd_types[buf(4,1):le_uint()]
-	-- if cmd_type == "ACK" then
-		-- old_str = old_str .." " .. cmd_type
-	-- end
+    old_str = old_str .. "sn="..buf(12,4):le_uint() --..",cmd=" .. cmd_types[buf(4,1):le_uint()] .. ",len="..kcp_data_len
+	local cmd_type = cmd_types[buf(4,1):le_uint()]
+	if cmd_type == "ACK" then
+		old_str = old_str .." " .. cmd_type
+	end
 	pkt.cols.info = old_str
 
     local t = root:add(kcp_proto, buf(0, kcp_header_len + kcp_data_len), "KCP")
@@ -57,10 +57,12 @@ do
 	--pkt.cols.info = "total_len=".. total_len..""
 	local len_offset = 0
 	local rest_len = total_len
-	while(rest_len >= kcp_header_len)
+	while(true)
 	do
 		if(rest_len < kcp_header_len) then
-			pkt.cols.info = tostring(pkt.cols.info).."; Error!!! rest_len="..rest_len.."<24"
+			if(rest_len > 0) then
+				pkt.cols.info = tostring(pkt.cols.info).."; Error!!! rest_len="..rest_len.."<24"
+			end
 			return
 		end
 		
@@ -75,7 +77,7 @@ do
 		len_offset = len_offset + kcp_header_len + kcp_data_len
 		rest_len = total_len - len_offset
 	end
-    return true
+    return
   end
 
   -- 注册协议
