@@ -24,17 +24,17 @@ do
   -- 每个kcp包
   function kcp_parse(buf, pkt, root)
 	local buf_len = buf:len();
-    local kcp_data_length = buf(20, 4):le_uint();
-	old_str = tostring(pkt.cols.info)
+    local kcp_data_len = buf(20, 4):le_uint();
+	local old_str = tostring(pkt.cols.info)
 	if old_str ~= "" then old_str = old_str .. "; " end
-    old_str = old_str .. "sn="..buf(12,4):le_uint() -- ..", cmd=" .. cmd_types[buf(4,1):le_uint()]
-	local cmd_type = cmd_types[buf(4,1):le_uint()]
-	if cmd_type == "ACK" then
-		old_str = old_str .." " .. cmd_type
-	end
+    old_str = old_str .. "sn="..buf(12,4):le_uint() ..",cmd=" .. cmd_types[buf(4,1):le_uint()] .. ",len="..kcp_data_len
+	-- local cmd_type = cmd_types[buf(4,1):le_uint()]
+	-- if cmd_type == "ACK" then
+		-- old_str = old_str .." " .. cmd_type
+	-- end
 	pkt.cols.info = old_str
 
-    local t = root:add(kcp_proto, buf(0, kcp_header_len + kcp_data_length), "KCP")
+    local t = root:add(kcp_proto, buf(0, kcp_header_len + kcp_data_len), "KCP")
     t:add(kcp_conv, buf(0, 4):le_uint())
     t:add(kcp_cmd, buf(4, 1):le_uint())
     t:add(kcp_frg, buf(5, 1):le_uint())
@@ -52,18 +52,28 @@ do
   -- UDP报文
   function kcp_proto.dissector(buf, pkt, root)
     pkt.cols.protocol = "KCP"
-	--pkt.cols.info = ""
+	pkt.cols.info = ""
+	local total_len = buf:len()
+	--pkt.cols.info = "total_len=".. total_len..""
 	local len_offset = 0
-	local buf_len = buf:len()
-	while(buf_len >= kcp_header_len)
+	local rest_len = total_len
+	while(rest_len >= kcp_header_len)
 	do
-		local kcp_data_length = buf(len_offset + 20, 4):le_uint()
-		--pkt.cols.info = tostring(pkt.cols.info) .. ";kcp_data_length=" ..kcp_data_length .. " "
-		if (kcp_header_len + kcp_data_length) > buf_len then return false end
-		local temp_buf = buf(len_offset, kcp_header_len + kcp_data_length)
+		if(rest_len < kcp_header_len) then
+			pkt.cols.info = tostring(pkt.cols.info).."; Error!!! rest_len="..rest_len.."<24"
+			return
+		end
+		
+		local kcp_data_len = buf(len_offset + 20, 4):le_uint()
+		if (kcp_header_len + kcp_data_len) > rest_len then 
+			pkt.cols.info = tostring(pkt.cols.info) .. "; Error!!! kcp_len=" ..kcp_header_len + kcp_data_len.. " but rest_len=".. rest_len
+			return
+		end
+		
+		local temp_buf = buf(len_offset, kcp_header_len + kcp_data_len)
 		kcp_parse(temp_buf, pkt, root)
-		len_offset = len_offset + kcp_header_len + kcp_data_length
-		buf_len = buf_len - len_offset
+		len_offset = len_offset + kcp_header_len + kcp_data_len
+		rest_len = total_len - len_offset
 	end
     return true
   end
